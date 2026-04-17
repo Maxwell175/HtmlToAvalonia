@@ -6,6 +6,7 @@ using AngleSharp.Dom;
 using AngleSharp.Html.Dom;
 using AngleSharp.Css.Dom;
 using System.Globalization;
+using System.Text.RegularExpressions;
 using AvaloniaHorizontalAlignment = Avalonia.Layout.HorizontalAlignment;
 using AvaloniaTextAlignment = Avalonia.Media.TextAlignment;
 using AvaloniaFontWeight = Avalonia.Media.FontWeight;
@@ -37,7 +38,7 @@ internal class HtmlToAvaloniaConverter
             "b" or "strong" => ConvertBold(element),
             "i" or "em" => ConvertItalic(element),
             "u" => ConvertUnderline(element),
-            "br" => new TextBlock { Text = "\n" },
+            "br" => new TextBlock { Text = string.Empty },
             "h1" or "h2" or "h3" or "h4" or "h5" or "h6" => ConvertHeading(element, tagName),
             _ => ConvertTextContent(element)
         };
@@ -56,7 +57,7 @@ internal class HtmlToAvaloniaConverter
 
         if (children.Count == 1 && children[0].NodeType == NodeType.Text)
         {
-            var textBlock = new TextBlock { Text = children[0].TextContent?.Trim() ?? string.Empty };
+            var textBlock = new TextBlock { Text = NormalizeTextNode(children[0].TextContent ?? string.Empty) ?? string.Empty };
             return ApplyStyles(textBlock, element);
         }
 
@@ -121,8 +122,8 @@ internal class HtmlToAvaloniaConverter
                 }
                 else if (child.NodeType == NodeType.Text)
                 {
-                    var text = child.TextContent;
-                    if (!string.IsNullOrEmpty(text))
+                    var text = NormalizeTextNode(child.TextContent);
+                    if (text != null)
                     {
                         textBlock.Inlines!.Add(new Run(text));
                     }
@@ -227,8 +228,8 @@ internal class HtmlToAvaloniaConverter
             }
             else if (node.NodeType == NodeType.Text)
             {
-                var text = node.TextContent;
-                if (!string.IsNullOrEmpty(text))
+                var text = NormalizeTextNode(node.TextContent);
+                if (text != null)
                 {
                     textBlock.Inlines!.Add(new Run(text));
                 }
@@ -400,8 +401,8 @@ internal class HtmlToAvaloniaConverter
             }
             else if (child.NodeType == NodeType.Text)
             {
-                var text = child.TextContent;
-                if (!string.IsNullOrEmpty(text))
+                var text = NormalizeTextNode(child.TextContent);
+                if (text != null)
                 {
                     // Apply accumulated formatting from context to text runs
                     var run = new Run(text)
@@ -794,7 +795,7 @@ internal class HtmlToAvaloniaConverter
     {
         var textBlock = new TextBlock
         {
-            Text = element.TextContent
+            Text = NormalizeTextNode(element.TextContent ?? string.Empty) ?? string.Empty
         };
         return ApplyStyles(textBlock, element);
     }
@@ -1204,6 +1205,18 @@ internal class HtmlToAvaloniaConverter
         };
     }
 
+    /// <summary>
+    /// Normalizes an HTML text node's whitespace the same way browsers do:
+    /// collapses all runs of whitespace (including newlines) to a single space.
+    /// Returns null when the result is empty so callers can skip adding a Run.
+    /// </summary>
+    private static string? NormalizeTextNode(string raw)
+    {
+        // Collapse any whitespace sequence (spaces, tabs, \r, \n) to a single space
+        var collapsed = Regex.Replace(raw, @"[\s]+", " ");
+        return collapsed.Length == 0 ? null : collapsed;
+    }
+
     private double ParseLength(string length)
     {
         length = length.ToLowerInvariant().Trim();
@@ -1310,8 +1323,8 @@ internal class HtmlToAvaloniaConverter
             }
             else if (child.NodeType == NodeType.Text)
             {
-                var text = child.TextContent;
-                if (!string.IsNullOrEmpty(text))
+                var text = NormalizeTextNode(child.TextContent);
+                if (text != null)
                 {
                     textBlock.Inlines!.Add(new Run(text));
                 }
